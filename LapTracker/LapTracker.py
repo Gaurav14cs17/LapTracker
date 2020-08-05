@@ -565,7 +565,7 @@ class LapTracker():
         for t in range(0, self.number_of_timepoints):
             label_image = self.movie[t, :, :]
             old_labels = self.df['label'].loc[
-                df.timepoint == t]
+                self.df.timepoint == t]
             new_labels = self.df['track_id'].loc[
                 self.df.timepoint == t]
             arr = np.zeros(label_image.max() + 1, dtype='uint16')
