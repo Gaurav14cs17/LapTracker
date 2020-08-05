@@ -1,7 +1,11 @@
 # WORK IN PROGRESS
 
 # LapTracker
-A simple linear assignment problem (LAP) object tracker that can handle gaps, splits and merges in object tracks.
+A simple linear assignment problem (LAP) object tracker that can handle gaps, splits and merges in object tracks. The tracking approach is inspired by: 
+
+Jaqaman, K., Loerke, D., Mettlen, M. et al. Robust single-particle tracking in live-cell time-lapse sequences. Nat Methods 5, 695–702 (2008). https://doi.org/10.1038
+
+However, some of the details were simplified, since this tracker is mainly supposed to be helpfull to track segmented objects (e.g. cells, nuclei) instead of single particles.
 
 # Example #1: track objects from pandas DataFrame
 There are at the moment two ways to use this tracker. The first one is to use it to track objects for which you have a pandas DataFrame of features. The DataFrame needs to at least include the x coordinates, y coordinates and timepoint. You can use the LapTracker in this case like this:
