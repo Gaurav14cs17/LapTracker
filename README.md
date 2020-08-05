@@ -27,7 +27,7 @@ tracked_df = tracker.df
 
 The df attribute of the tracker will be the same DataFrame with 3 additional columns: unique_id, segment_id and track_id. The track_id is the most important one, as it tells you which track the object is finally assigned to.
 
-# Example #2: track objets from label image stack
+# Example #2: track objects from label image stack
 In case you only have label images of your objects for each timepoint, you can use a different functionality of the tracker:
 
 ```python
