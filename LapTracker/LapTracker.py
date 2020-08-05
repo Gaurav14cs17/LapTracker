@@ -13,6 +13,7 @@ from scipy.optimize import linear_sum_assignment
 import networkx as nx
 from progress.bar import Bar
 from skimage.measure import regionprops_table
+import warnings
 
 
 class LapTracker():
@@ -445,8 +446,12 @@ class LapTracker():
 
         self.average_displacement = np.array(
             self.average_displacement)
-        average_displacement_all_segments = np.nanmean(
-            self.average_displacement)
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            average_displacement_all_segments = np.nanmean(
+                self.average_displacement)
+            
         self.average_displacement[np.isnan(
             self.average_displacement)] = average_displacement_all_segments
 
