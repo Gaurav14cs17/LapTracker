@@ -13,6 +13,6 @@ setup(name='LapTracker',
       author='Adrian Tschan',
       author_email='adrian.tschan@uzh.ch',
       packages=['LapTracker'],
-      install_requires=['numpy', 'pandas', 'scipy', 'networkx', 'skimage',
+      install_requires=['numpy', 'pandas', 'scipy', 'networkx', 'scikit-image',
                         'progress']
      )
