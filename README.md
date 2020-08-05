@@ -11,7 +11,7 @@ However, some of the details were simplified, since this tracker is mainly suppo
 There are at the moment two ways to use this tracker. The first one is to use it to track objects for which you have a pandas DataFrame of features. The DataFrame needs to at least include the x coordinates, y coordinates and timepoint. You can use the LapTracker in this case like this:
 
 ```python
-from LapTracker import LapTracker
+from LapTracker.LapTracker import *
 import numpy as np
 
 columns = ['x_coordinates', 'y_coordinates', 'timepoints', 'labels']
@@ -31,7 +31,7 @@ The df attribute of the tracker will be the same DataFrame with 3 additional col
 In case you only have label images of your objects for each timepoint, you can use a different functionality of the tracker:
 
 ```python
-from LapTracker import LapTracker
+from LapTracker.LapTracker import *
 from skimage.io import imread
 
 # load your image stack. should be t * x * y.
