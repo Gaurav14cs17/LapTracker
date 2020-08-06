@@ -7,13 +7,13 @@ Created on Mon Jul 27 12:15:09 2020
 import numpy as np
 import pandas as pd
 import numpy.matlib
+import networkx as nx
+import warnings
+from progress.bar import Bar
+from skimage.measure import regionprops_table
 from scipy.spatial import distance
 from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
-import networkx as nx
-from progress.bar import Bar
-from skimage.measure import regionprops_table
-import warnings
 
 
 class LapTracker():
