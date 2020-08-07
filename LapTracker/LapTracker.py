@@ -41,12 +41,22 @@ class LapTracker():
         indicates whether object merging is allowed or not (default: False)
     allow_splitting: bool
         indicates whether object splitting is allowed or not (default: True)
+    segments : list
+        contains the unique ids of the members of the detected segments
+    segments_by_label : list
+        contains the labels of the members of the detected segments
+    tracks : list
+        contains the unique ids of the members of the detected tracks
+    tracks_by_label : list
+        contains the labels of the members of the detected tracks
 
     Methods
     -------
-    track()
+    track_df(df, identifiers)
         tracks the objects in df and assigns 3 additional collumns
         (unique_id, segment_id and track_id).
+    track_label_images(movie)
+        tracks the objects in the movie and computes centroid/track features.
     """
 
     def __init__(self,
@@ -446,12 +456,12 @@ class LapTracker():
 
         self.average_displacement = np.array(
             self.average_displacement)
-        
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             average_displacement_all_segments = np.nanmean(
                 self.average_displacement)
-            
+
         self.average_displacement[np.isnan(
             self.average_displacement)] = average_displacement_all_segments
 
@@ -572,7 +582,7 @@ class LapTracker():
             old_labels = self.df['label'].loc[
                 self.df.timepoint == t]
             new_labels = self.df['track_id'].loc[
-                self.df.timepoint == t]
+                self.df.timepoint == t] + 1
             arr = np.zeros(label_image.max() + 1, dtype='uint16')
             arr[old_labels] = new_labels
             relabeled_movie[t, :, :] = arr[label_image]
