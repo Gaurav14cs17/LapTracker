@@ -205,9 +205,9 @@ class LapTracker():
 
         split_dist = distance_matrix(
             self.segment_middlepoints[[self.identifiers[0],
-                                       self.identifiers[0]]],
+                                       self.identifiers[1]]],
             self.start_points[[self.identifiers[0],
-                                       self.identifiers[0]]])
+                                       self.identifiers[1]]])
 
         split_dist[split_dist == 0] = np.inf
 
@@ -415,9 +415,9 @@ class LapTracker():
         # get start and end points of the detected segments
 
         self.start_points = self.df.loc[self.df['is_start'] == 1].sort_values(
-            'unique_id')
+            'segment_id')
         self.end_points = self.df.loc[self.df['is_end'] == 1].sort_values(
-            'unique_id')
+            'segment_id')
 
         # get the segment middle points
 
