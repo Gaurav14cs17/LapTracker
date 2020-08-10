@@ -130,14 +130,31 @@ class LapTracker():
 
         return frame_linking_matrix
 
-    def __get_intensity_matrix(self):
+    def __get_intensity_matrix(self, split_dist):
         '''Generates intensity matrix for object splitting/merging'''
-        for r in self.number_of_middlepoints:
-            for c in self.number_of_segments:
-                # get intensity of current middlepoint
-                mp_int = self.segment_middlepoints['sum_intensity'].iloc[r]
-                # get intensity of current segment start
-                start_int = self.start_points['sum_intensity'].iloc[r]
+        intensity_matrix = np.ones(np.shape(split_dist))
+        r, c = np.where(split_dist != np.inf)
+        for split in range(0, len(r)):
+            # get intensity of current middlepoint
+            mp_int = self.segment_middlepoints['sum_intensity'].iloc[r[split]]
+            mp_timepoint = self.segment_middlepoints['timepoint'].iloc[
+                r[split]]
+            mp_segment_id = self.segment_middlepoints['segment_id'].iloc[
+                r[split]]
+            next_mp_int = np.array(
+                self.segment_middlepoints['sum_intensity'].loc[
+                (self.segment_middlepoints['timepoint'] == mp_timepoint) &
+                (self.segment_middlepoints['segment_id'] == mp_segment_id)])
+            next_mp_int = next_mp_int[0]
+            # get intensity of current segment start
+            start_int = self.start_points['sum_intensity'].iloc[c[split]] 
+            intensity_ratio = (mp_int/(next_mp_int + start_int))            
+            if intensity_ratio > 1:
+                intensity_matrix[r[split], c[split]] = intensity_ratio
+            elif intensity_ratio < 1:
+                intensity_matrix[r[split], c[split]] = intensity_ratio**-2
+                
+        return intensity_matrix
 
     def __get_segment_linking_matrix(self):
         """Generates cost matrix for segment linking"""
@@ -223,6 +240,12 @@ class LapTracker():
 
         split_dist[(matrix_c > 1) | (matrix_c <= 0)] = np.inf
         split_dist[split_dist > self.max_split_distance] = np.inf
+        
+        # include intensity comparison
+        
+        intensity_matrix = self.__get_intensity_matrix(split_dist)
+        
+        split_dist = split_dist*intensity_matrix
 
         segment_linking_matrix[
             self.number_of_segments:(self.number_of_segments +
