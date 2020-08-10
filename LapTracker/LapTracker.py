@@ -130,6 +130,15 @@ class LapTracker():
 
         return frame_linking_matrix
 
+    def __get_intensity_matrix(self):
+        '''Generates intensity matrix for object splitting/merging'''
+        for r in self.number_of_middlepoints:
+            for c in self.number_of_segments:
+                # get intensity of current middlepoint
+                mp_int = self.segment_middlepoints['sum_intensity'].iloc[r]
+                # get intensity of current segment start
+                start_int = self.start_points['sum_intensity'].iloc[r]
+
     def __get_segment_linking_matrix(self):
         """Generates cost matrix for segment linking"""
 
@@ -141,10 +150,14 @@ class LapTracker():
 
         # gap_closing_matrix
 
-        dist = distance_matrix(self.end_coordinates[:, 0:2],
-                               self.start_coordinates[:, 0:2])
-        temp_dist = distance_matrix(self.end_coordinates[:, 2:4],
-                                    self.start_coordinates[:, 2:4])
+        dist = distance_matrix(self.end_points[[self.identifiers[0],
+                                                self.identifiers[1]]],
+                               self.start_points[[self.identifiers[0],
+                                                self.identifiers[1]]])
+        temp_dist = distance_matrix(
+            self.end_points[[self.identifiers[2], 'filler']],
+            self.start_points[[self.identifiers[2], 'filler']])
+
         disallowed_dist = temp_dist > self.time_window
         dist[disallowed_dist] = np.inf
 
@@ -190,17 +203,20 @@ class LapTracker():
 
         # split_matrix
 
-        split_dist = distance_matrix(self.segment_middlepoints.iloc[:, 0:2],
-                                     self.start_coordinates[:, 0:2])
+        split_dist = distance_matrix(
+            self.segment_middlepoints[[self.identifiers[0],
+                                       self.identifiers[0]]],
+            self.start_points[[self.identifiers[0],
+                                       self.identifiers[0]]])
 
         split_dist[split_dist == 0] = np.inf
 
         # find splits that are close enough at t-1
 
         matrix_a = np.transpose(
-            numpy.matlib.repmat(self.segment_middlepoints.iloc[:, 2],
+            numpy.matlib.repmat(self.segment_middlepoints[self.identifiers[2]],
                                 self.number_of_segments, 1))
-        matrix_b = numpy.matlib.repmat(self.start_coordinates[:, 2],
+        matrix_b = numpy.matlib.repmat(self.start_points[self.identifiers[2]],
                                        self.number_of_segment_middlepoints, 1)
 
         matrix_c = matrix_b - matrix_a
@@ -255,7 +271,7 @@ class LapTracker():
                            self.number_of_segment_middlepoints])*np.inf
 
         diagonal = self.average_displacement[np.array(
-            [self.segment_middlepoints.iloc[:, 4]])]**2
+            [self.segment_middlepoints['segment_id']])]**2
 
         np.fill_diagonal(allowed, diagonal)
 
@@ -370,62 +386,42 @@ class LapTracker():
                                         key=len,
                                         reverse=True)]
 
-        # add column for segment ids
+        # add column for segment ids, identifiers for start/end/middlepoints
 
         segment_ids = []
+        is_start = np.zeros([self.number_of_objects])
+        is_end = np.zeros([self.number_of_objects])
+        is_middlepoint = np.zeros([self.number_of_objects])
         for obj in range(0, self.number_of_objects):
             for segment_id, segment in enumerate(self.segments):
                 if obj in segment:
                     segment_ids.append(segment_id)
+                if obj in segment[1:-1]:
+                    is_middlepoint[obj] = 1
+                if obj == segment[0]:
+                    is_start[obj] = 1
+                if obj == segment[-1]:
+                    is_end[obj] = 1
 
         self.df['segment_id'] = segment_ids
-
+        self.df['is_start'] = is_start
+        self.df['is_end'] = is_end
+        self.df['is_middlepoint'] = is_middlepoint
+        self.df['filler'] = np.zeros([self.number_of_objects])
+        
     def __close_gaps(self):
         """Deals with gaps/merging/splitting based on to gap closing matrix"""
 
-        # get start and end coordinates of the detected segments
+        # get start and end points of the detected segments
 
-        start_coordinates = [[self.df[self.identifiers[0]].iloc[sorted(c)[0]],
-                              self.df[self.identifiers[1]].iloc[sorted(c)[0]],
-                              self.df[self.identifiers[2]].iloc[sorted(c)[0]],
-                              0]
-                             for c in sorted(
-                                     nx.weakly_connected_components(self.G),
-                                     key=len,
-                                     reverse=True)]
-
-        end_coordinates = [[self.df[self.identifiers[0]].iloc[sorted(c)[-1]],
-                            self.df[self.identifiers[1]].iloc[sorted(c)[-1]],
-                            self.df[self.identifiers[2]].iloc[sorted(c)[-1]],
-                            0]
-                           for c in sorted(
-                                   nx.weakly_connected_components(self.G),
-                                   key=len,
-                                   reverse=True)]
-
-        self.start_coordinates = np.array(start_coordinates)
-        self.end_coordinates = np.array(end_coordinates)
+        self.start_points = self.df.loc[self.df['is_start'] == 1].sort_values(
+            'unique_id')
+        self.end_points = self.df.loc[self.df['is_end'] == 1].sort_values(
+            'unique_id')
 
         # get the segment middle points
 
-        segment_middlepoints = []
-        for segment in self.segments:
-            for segment_object in segment[1:-1]:
-                segment_middlepoints.append([
-                    self.df[self.identifiers[0]].iloc[segment_object],
-                    self.df[self.identifiers[1]].iloc[segment_object],
-                    self.df[self.identifiers[2]].iloc[segment_object],
-                    self.df['unique_id'].iloc[segment_object],
-                    self.df['segment_id'].iloc[segment_object]])
-
-        segment_middlepoints = pd.DataFrame(np.array(segment_middlepoints),
-                                            columns=[self.identifiers[0],
-                                                     self.identifiers[1],
-                                                     self.identifiers[2],
-                                                     'unique_id',
-                                                     'segment_id'],
-                                            dtype='uint16')
-
+        segment_middlepoints = self.df.loc[self.df['is_middlepoint'] == 1]
         self.segment_middlepoints = segment_middlepoints.sort_values(
             'unique_id')
         self.number_of_segment_middlepoints = len(segment_middlepoints)
@@ -482,25 +478,9 @@ class LapTracker():
 
         # get unique id of the segment starting points
 
-        start_points = [[self.df[self.identifiers[0]].iloc[sorted(c)[0]],
-                         self.df[self.identifiers[1]].iloc[sorted(c)[0]],
-                         self.df['unique_id'].iloc[sorted(c)[0]],
-                         self.df['segment_id'].iloc[sorted(c)[0]], 0]
-                        for c in sorted(nx.weakly_connected_components(self.G),
-                                        key=len,
-                                        reverse=True)]
-
-        end_points = [[self.df[self.identifiers[0]].iloc[sorted(c)[-1]],
-                       self.df[self.identifiers[1]].iloc[sorted(c)[-1]],
-                       self.df['unique_id'].iloc[sorted(c)[-1]],
-                       self.df['segment_id'].iloc[sorted(c)[-1]], 0]
-                      for c in sorted(nx.weakly_connected_components(self.G),
-                                      key=len,
-                                      reverse=True)]
-        end_points = np.array(end_points)
-        start_points = np.array(start_points)
         target_unique_id = np.array(
-            start_points[np.array(target_segment_starts)][:, 2], dtype='int')
+            self.start_points['unique_id'].iloc[
+                np.array(target_segment_starts)], dtype='int')
 
         self.adjacency_matrix[sources_unique_id, target_unique_id] = 1
 
@@ -510,12 +490,13 @@ class LapTracker():
         sources = sources[(sources >= 0) &
                           (sources < self.number_of_segments)]
         sources_unique_id = np.array(
-            end_points[np.array(sources)][:, 2], dtype='int')
+            self.end_points['unique_id'].iloc[np.array(sources)], dtype='int')
 
         # get unique id of the segment starting points
         target_segment_starts = col_ind[np.array(sources)]
         target_unique_id = np.array(
-            start_points[np.array(target_segment_starts)][:, 2], dtype='int')
+            self.start_points['unique_id'].iloc[
+                np.array(target_segment_starts)], dtype='int')
 
         self.adjacency_matrix[sources_unique_id, target_unique_id] = 1
         self.segment_row_index = row_ind
@@ -574,11 +555,11 @@ class LapTracker():
         self.df['track_id'] = track_ids
 
     def __switch_labels(self):
-        relabeled_movie = np.zeros(np.shape(self.movie), dtype='uint16')
+        relabeled_movie = np.zeros(np.shape(self.label_stack), dtype='uint16')
         bar = Bar('switching labels', max=self.number_of_timepoints,
                   check_tty=False, hide_cursor=False)
         for t in range(0, self.number_of_timepoints):
-            label_image = self.movie[t, :, :]
+            label_image = self.label_stack[t, :, :]
             old_labels = self.df['label'].loc[
                 self.df.timepoint == t]
             new_labels = self.df['track_id'].loc[
@@ -591,7 +572,7 @@ class LapTracker():
 
         return relabeled_movie
 
-    def track_label_images(self, movie):
+    def track_label_images(self, label_stack, intensity_stack=None):
         '''
         Tracks objects in label images over timepoints
 
@@ -600,8 +581,10 @@ class LapTracker():
 
         Parameters
         ----------
-        movie: np.array
+        label_stack: np.array
             3D numpy array of labelled objects (t, x, y)
+        intensity_stack: np.array
+            3D numpy array of intensity images (t, x, y) (default: None)
 
         Returns
         -------
@@ -611,21 +594,42 @@ class LapTracker():
             feature measurements used for tracking
         '''
 
-        self.movie = movie
-        self.number_of_timepoints = np.size(self.movie, 0)
+        self.label_stack = label_stack
+        self.intensity_stack = intensity_stack
+        self.number_of_timepoints = np.size(self.label_stack, 0)
         df = pd.DataFrame()
         # measure centroids of objects at all timepoints
         bar = Bar('measuring centroids', max=self.number_of_timepoints,
                   check_tty=False, hide_cursor=False)
-        for t in range(0, self.number_of_timepoints):
-            current_features = regionprops_table(self.movie[t, :, :],
-                                                 properties=['label',
-                                                             'centroid'])
-            current_features['timepoint'] = t
-            current_features = pd.DataFrame(current_features)
-            df = df.append(current_features)
-            bar.next()
-        bar.finish()
+
+        if intensity_stack is None:
+            for t in range(0, self.number_of_timepoints):
+                current_features = regionprops_table(
+                    self.label_stack[t, :, :],
+                    properties=['label',
+                                'centroid'])
+                current_features['timepoint'] = t
+                current_features = pd.DataFrame(current_features)
+                df = df.append(current_features)
+                bar.next()
+            bar.finish()
+        else:
+            for t in range(0, self.number_of_timepoints):
+                current_features = regionprops_table(
+                    self.label_stack[t, :, :],
+                    self.intensity_stack[t, :, :],
+                    properties=['label',
+                                'centroid',
+                                'mean_intensity',
+                                'area'])
+                current_features['timepoint'] = t
+                current_features = pd.DataFrame(current_features)
+                current_features['sum_intensity'] = (
+                    current_features['area'] *
+                    current_features['mean_intensity'])
+                df = df.append(current_features)
+                bar.next()
+            bar.finish()
         # track the objects in the df
         self.track_df(df,
                       ['centroid-0', 'centroid-1', 'timepoint', 'label'])
