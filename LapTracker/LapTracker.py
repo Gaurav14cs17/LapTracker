@@ -55,7 +55,7 @@ class LapTracker():
     track_df(df, identifiers)
         tracks the objects in df and assigns 3 additional collumns
         (unique_id, segment_id and track_id).
-    track_label_images(movie)
+    track_label_images(label_stack, intensity_stack(optional))
         tracks the objects in the movie and computes centroid/track features.
     """
 
@@ -134,6 +134,9 @@ class LapTracker():
         '''Generates intensity matrix for object splitting/merging'''
         intensity_matrix = np.ones(np.shape(split_dist))
         r, c = np.where(split_dist != np.inf)
+        bar = Bar('calculating intensity matrix for plausible split events', 
+                  max=len(r),
+                  check_tty=False, hide_cursor=False)
         for split in range(0, len(r)):
             # get intensity of current middlepoint
             mp_int = self.segment_middlepoints['sum_intensity'].iloc[r[split]]
@@ -143,17 +146,21 @@ class LapTracker():
                 r[split]]
             next_mp_int = np.array(
                 self.segment_middlepoints['sum_intensity'].loc[
-                (self.segment_middlepoints['timepoint'] == mp_timepoint) &
-                (self.segment_middlepoints['segment_id'] == mp_segment_id)])
+                    (self.segment_middlepoints['timepoint'] ==
+                     mp_timepoint) &
+                    (self.segment_middlepoints['segment_id'] ==
+                     mp_segment_id)])
             next_mp_int = next_mp_int[0]
             # get intensity of current segment start
-            start_int = self.start_points['sum_intensity'].iloc[c[split]] 
-            intensity_ratio = (mp_int/(next_mp_int + start_int))            
+            start_int = self.start_points['sum_intensity'].iloc[c[split]]
+            intensity_ratio = (mp_int/(next_mp_int + start_int))
             if intensity_ratio > 1:
                 intensity_matrix[r[split], c[split]] = intensity_ratio
             elif intensity_ratio < 1:
                 intensity_matrix[r[split], c[split]] = intensity_ratio**-2
-                
+            bar.next()
+        bar.finish()
+
         return intensity_matrix
 
     def __get_segment_linking_matrix(self):
@@ -170,7 +177,7 @@ class LapTracker():
         dist = distance_matrix(self.end_points[[self.identifiers[0],
                                                 self.identifiers[1]]],
                                self.start_points[[self.identifiers[0],
-                                                self.identifiers[1]]])
+                                                  self.identifiers[1]]])
         temp_dist = distance_matrix(
             self.end_points[[self.identifiers[2], 'filler']],
             self.start_points[[self.identifiers[2], 'filler']])
@@ -223,8 +230,7 @@ class LapTracker():
         split_dist = distance_matrix(
             self.segment_middlepoints[[self.identifiers[0],
                                        self.identifiers[1]]],
-            self.start_points[[self.identifiers[0],
-                                       self.identifiers[1]]])
+            self.start_points[[self.identifiers[0], self.identifiers[1]]])
 
         split_dist[split_dist == 0] = np.inf
 
@@ -240,12 +246,13 @@ class LapTracker():
 
         split_dist[(matrix_c > 1) | (matrix_c <= 0)] = np.inf
         split_dist[split_dist > self.max_split_distance] = np.inf
-        
-        # include intensity comparison
-        
-        intensity_matrix = self.__get_intensity_matrix(split_dist)
-        
-        split_dist = split_dist*intensity_matrix
+
+        # include intensity comparison if requested
+        if self.intensity_stack is None:
+            pass
+        else:
+            intensity_matrix = self.__get_intensity_matrix(split_dist)
+            split_dist = split_dist*intensity_matrix
 
         segment_linking_matrix[
             self.number_of_segments:(self.number_of_segments +
@@ -431,7 +438,7 @@ class LapTracker():
         self.df['is_end'] = is_end
         self.df['is_middlepoint'] = is_middlepoint
         self.df['filler'] = np.zeros([self.number_of_objects])
-        
+
     def __close_gaps(self):
         """Deals with gaps/merging/splitting based on to gap closing matrix"""
 
@@ -451,9 +458,11 @@ class LapTracker():
 
         # calculate average displacement for each segment
         # this is later used to compute the cost matrix
-
+        
         self.average_displacement = []
-
+        bar = Bar('calculating average displacement per segment',
+                  max=self.number_of_segments,
+                  check_tty=False, hide_cursor=False)
         for segment_id in range(self.number_of_segments):
             current_segment_displacements = []
             current_segment = self.df.loc[self.df.segment_id == segment_id]
@@ -470,8 +479,12 @@ class LapTracker():
                         loc[current_segment[
                             self.identifiers[2]] == timepoint+1])
                     current_segment_displacements.append(current_displacement)
-            self.average_displacement.append(
-                np.mean(np.array(current_segment_displacements)))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                self.average_displacement.append(
+                    np.mean(np.array(current_segment_displacements)))
+            bar.next()
+        bar.finish()
 
         self.average_displacement = np.array(
             self.average_displacement)
