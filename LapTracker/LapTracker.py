@@ -11,7 +11,7 @@ import networkx as nx
 import warnings
 from progress.bar import Bar
 from skimage.measure import regionprops_table
-from scipy.spatial import distance
+from sklearn.metrics.pairwise import paired_distances
 from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
 
@@ -87,6 +87,7 @@ class LapTracker():
         self.time_window = time_window
         self.allow_merging = allow_merging
         self.allow_splitting = allow_splitting
+        self.intensity_stack = None
         self.link_costs = []
         self.global_costs = []
 
@@ -157,10 +158,10 @@ class LapTracker():
             if intensity_ratio > 1:
                 intensity_matrix[r[split], c[split]] = intensity_ratio
             elif intensity_ratio < 1:
-                intensity_matrix[r[split], c[split]] = intensity_ratio**-2
+                intensity_matrix[r[split], c[split]] = (
+                    intensity_ratio**-self.intensity_weight)
             bar.next()
         bar.finish()
-
         return intensity_matrix
 
     def __get_segment_linking_matrix(self):
@@ -458,44 +459,23 @@ class LapTracker():
 
         # calculate average displacement for each segment
         # this is later used to compute the cost matrix
-        
-        self.average_displacement = []
-        bar = Bar('calculating average displacement per segment',
-                  max=self.number_of_segments,
-                  check_tty=False, hide_cursor=False)
-        for segment_id in range(self.number_of_segments):
-            current_segment_displacements = []
-            current_segment = self.df.loc[self.df.segment_id == segment_id]
-            for timepoint in current_segment[self.identifiers[2]]:
-                if timepoint == np.max(current_segment[self.identifiers[2]]):
-                    break
-                else:
-                    current_displacement = distance.euclidean(
-                        current_segment[[self.identifiers[0],
-                                         self.identifiers[1]]].
-                        loc[current_segment[self.identifiers[2]] == timepoint],
-                        current_segment[[self.identifiers[0],
-                                         self.identifiers[1]]].
-                        loc[current_segment[
-                            self.identifiers[2]] == timepoint+1])
-                    current_segment_displacements.append(current_displacement)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                self.average_displacement.append(
-                    np.mean(np.array(current_segment_displacements)))
-            bar.next()
-        bar.finish()
-
+        print('calculating average displacement per segment')
+        def get_average_displacement(df):
+            if len(df) > 1:
+                test = paired_distances(
+                    df[[self.identifiers[0],
+                        self.identifiers[1]]].iloc[1:,:],
+                    df[[self.identifiers[0],
+                        self.identifiers[1]]].shift().iloc[1:,:])
+                return np.mean(test)
+            else:
+                pass
         self.average_displacement = np.array(
-            self.average_displacement)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            average_displacement_all_segments = np.nanmean(
+            self.df.groupby('segment_id').apply(get_average_displacement))
+        
+        self.average_displacement[
+            np.isnan(self.average_displacement)] = np.nanmean(
                 self.average_displacement)
-
-        self.average_displacement[np.isnan(
-            self.average_displacement)] = average_displacement_all_segments
 
         self.cost_matrix_gap_closing = self.__get_segment_linking_matrix()
 
@@ -608,7 +588,8 @@ class LapTracker():
 
         return relabeled_movie
 
-    def track_label_images(self, label_stack, intensity_stack=None):
+    def track_label_images(self, label_stack, intensity_stack=None,
+                           intensity_weight=2):
         '''
         Tracks objects in label images over timepoints
 
@@ -632,6 +613,7 @@ class LapTracker():
 
         self.label_stack = label_stack
         self.intensity_stack = intensity_stack
+        self.intensity_weight = intensity_weight
         self.number_of_timepoints = np.size(self.label_stack, 0)
         df = pd.DataFrame()
         # measure centroids of objects at all timepoints
