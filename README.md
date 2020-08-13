@@ -1,7 +1,7 @@
 # WORK IN PROGRESS
 
 # LapTracker
-A simple linear assignment problem (LAP) object tracker that can handle gaps, splits and merges in object tracks. The tracking approach is inspired by: 
+A simple linear assignment problem (LAP) object tracker that can handle gaps, splits and merges in object tracks. The tracking approach is based on: 
 
 Jaqaman, K., Loerke, D., Mettlen, M. et al. Robust single-particle tracking in live-cell time-lapse sequences. Nat Methods 5, 695–702 (2008). https://doi.org/10.1038
 
