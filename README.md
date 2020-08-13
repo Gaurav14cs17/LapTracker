@@ -46,7 +46,7 @@ tracker.track_label_images(stack)
 After processing, the tracker object will have the attributes "relabeled_movie" (a numpy array in which the objects are relabeled according to their track id) and "df" (a pd.DataFrame containing the centroid measurements of the objects as well as unique_id, segment_id and track_id)
 
 # Example #3: track objects from label image stack with additional intensity information
-In case you think the object intensity could be helpful for your tracking problem, you can also use that:
+In case you think the object intensities could be helpful for your tracking problem, you can also give them as input. The object intensities will be used to adapt the cost for splits and merges of track segments:
 
 ```python
 from LapTracker.LapTracker import *
