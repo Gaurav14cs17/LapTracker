@@ -14,31 +14,49 @@ There are at the moment two ways to use this tracker. The first one is to use it
 from LapTracker.LapTracker import *
 import numpy as np
 
-columns = ['x_coordinates', 'y_coordinates', 'timepoints', 'labels']
 df = np.random.choice(2000, [500, 4], replace=False)
 df[:, 2] = np.repeat(np.arange(0, 50), 10)
+columns = ['x_coordinates', 'y_coordinates', 'timepoints', 'labels']
 df = pd.DataFrame(df, columns=columns)
 
 
-tracker = LapTracker(max_distance=150, time_window=4, max_split_distance=150)
-tracker.track_df(df, columns)
+tracker = LapTracker(max_distance=50, time_window=4, max_split_distance=50,
+                     max_gap_closing_distance=150)
+tracker.track_df(df, identifiers=columns)
 tracked_df = tracker.df
 ```
 
-The df attribute of the tracker will be the same DataFrame with 3 additional columns: unique_id, segment_id and track_id. The track_id is the most important one, as it tells you which track the object is finally assigned to.
+The df attribute of the tracker will be the same DataFrame with some additional columns. The track_id is the most important one, as it tells you which track the object is finally assigned to.
 
 # Example #2: track objects from label image stack
-In case you only have label images of your objects for each timepoint, you can use a different functionality of the tracker:
+In case you have label images of your objects for each timepoint, you can use a different functionality of the tracker:
 
 ```python
 from LapTracker.LapTracker import *
 from skimage.io import imread
 
 # load your image stack. should be t * x * y.
-stack = imread('my_stack.tiff')
-tracker = LapTracker(max_distance=150, time_window=4, max_split_distance=150)
+stack = imread('my_label_stack.tiff')
+tracker = LapTracker(max_distance=50, time_window=4, max_split_distance=50,
+                     max_gap_closing_distance=150)
 tracker.track_label_images(stack)
 
 ```
 
 After processing, the tracker object will have the attributes "relabeled_movie" (a numpy array in which the objects are relabeled according to their track id) and "df" (a pd.DataFrame containing the centroid measurements of the objects as well as unique_id, segment_id and track_id)
+
+# Example #3: track objects from label image stack with additional intensity information
+In case you think the object intensity could be helpful for your tracking problem, you can also use that:
+
+```python
+from LapTracker.LapTracker import *
+from skimage.io import imread
+
+# load your image stack. should be t * x * y.
+label_stack = imread('my_label_stack.tiff')
+intensity_stack = imread('my_intensity_stack.tiff')
+tracker = LapTracker(max_distance=50, time_window=4, max_split_distance=50,
+                     max_gap_closing_distance=150)
+tracker.track_label_images(label_stack=label_stack, intensity_stack=intensity_stack)
+'''
+
