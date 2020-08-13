@@ -58,5 +58,6 @@ intensity_stack = imread('my_intensity_stack.tiff')
 tracker = LapTracker(max_distance=50, time_window=4, max_split_distance=50,
                      max_gap_closing_distance=150)
 tracker.track_label_images(label_stack=label_stack, intensity_stack=intensity_stack)
+
 '''
 
