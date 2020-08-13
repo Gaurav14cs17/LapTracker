@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import numpy.matlib
 import networkx as nx
-import warnings
 from progress.bar import Bar
 from skimage.measure import regionprops_table
 from sklearn.metrics.pairwise import paired_distances
@@ -63,6 +62,7 @@ class LapTracker():
                  max_distance,
                  time_window,
                  max_split_distance,
+                 max_gap_closing_distance,
                  allow_merging=False,
                  allow_splitting=True):
         """
@@ -74,6 +74,8 @@ class LapTracker():
             maximal memory of the tracker to link track segments
         max_split_distance : int
             maximal distance to link segment starts to segment middlepoints
+        max_gap_closing_distance: int
+            maximal distance to close gaps
         allow_merging : bool
             indicates whether object merging is allowed or not
             (default: False)
@@ -84,6 +86,7 @@ class LapTracker():
 
         self.max_distance = max_distance
         self.max_split_distance = max_split_distance
+        self.max_gap_closing_distance = max_gap_closing_distance
         self.time_window = time_window
         self.allow_merging = allow_merging
         self.allow_splitting = allow_splitting
@@ -135,7 +138,7 @@ class LapTracker():
         '''Generates intensity matrix for object splitting/merging'''
         intensity_matrix = np.ones(np.shape(split_dist))
         r, c = np.where(split_dist != np.inf)
-        bar = Bar('calculating intensity matrix for plausible split events', 
+        bar = Bar('calculating intensity matrix for plausible split events',
                   max=len(r),
                   check_tty=False, hide_cursor=False)
         for split in range(0, len(r)):
@@ -188,7 +191,7 @@ class LapTracker():
 
         # replace entries that are above threshold
 
-        dist[dist > self.max_distance] = np.inf
+        dist[dist > self.max_gap_closing_distance] = np.inf
 
         gap_closing_matrix = dist
 
@@ -459,20 +462,22 @@ class LapTracker():
 
         # calculate average displacement for each segment
         # this is later used to compute the cost matrix
+
         print('calculating average displacement per segment')
+
         def get_average_displacement(df):
             if len(df) > 1:
                 test = paired_distances(
                     df[[self.identifiers[0],
-                        self.identifiers[1]]].iloc[1:,:],
+                        self.identifiers[1]]].iloc[1:, :],
                     df[[self.identifiers[0],
-                        self.identifiers[1]]].shift().iloc[1:,:])
+                        self.identifiers[1]]].shift().iloc[1:, :])
                 return np.mean(test)
             else:
                 pass
         self.average_displacement = np.array(
             self.df.groupby('segment_id').apply(get_average_displacement))
-        
+
         self.average_displacement[
             np.isnan(self.average_displacement)] = np.nanmean(
                 self.average_displacement)
@@ -587,6 +592,51 @@ class LapTracker():
         bar.finish()
 
         return relabeled_movie
+    
+    def localize_objects(self):
+        ''' localizes objects in label images
+        
+        Returns:
+        -------
+            df: pd.DataFrame
+                DataFrame containing x, y, t coordinates and labels of objects
+                (optionally also contains intensity measurements)
+        '''
+        
+        df = pd.DataFrame()
+        # measure centroids of objects at all timepoints
+        bar = Bar('measuring centroids', max=self.number_of_timepoints,
+                  check_tty=False, hide_cursor=False)
+
+        if self.intensity_stack is None:
+            for t in range(0, self.number_of_timepoints):
+                current_features = regionprops_table(
+                    self.label_stack[t, :, :],
+                    properties=['label',
+                                'centroid'])
+                current_features['timepoint'] = t
+                current_features = pd.DataFrame(current_features)
+                df = df.append(current_features)
+                bar.next()
+            bar.finish()
+        else:
+            for t in range(0, self.number_of_timepoints):
+                current_features = regionprops_table(
+                    self.label_stack[t, :, :],
+                    self.intensity_stack[t, :, :],
+                    properties=['label',
+                                'centroid',
+                                'mean_intensity',
+                                'area'])
+                current_features['timepoint'] = t
+                current_features = pd.DataFrame(current_features)
+                current_features['sum_intensity'] = (
+                    current_features['area'] *
+                    current_features['mean_intensity'])
+                df = df.append(current_features)
+                bar.next()
+            bar.finish()
+        return df
 
     def track_label_images(self, label_stack, intensity_stack=None,
                            intensity_weight=2):
@@ -615,39 +665,7 @@ class LapTracker():
         self.intensity_stack = intensity_stack
         self.intensity_weight = intensity_weight
         self.number_of_timepoints = np.size(self.label_stack, 0)
-        df = pd.DataFrame()
-        # measure centroids of objects at all timepoints
-        bar = Bar('measuring centroids', max=self.number_of_timepoints,
-                  check_tty=False, hide_cursor=False)
-
-        if intensity_stack is None:
-            for t in range(0, self.number_of_timepoints):
-                current_features = regionprops_table(
-                    self.label_stack[t, :, :],
-                    properties=['label',
-                                'centroid'])
-                current_features['timepoint'] = t
-                current_features = pd.DataFrame(current_features)
-                df = df.append(current_features)
-                bar.next()
-            bar.finish()
-        else:
-            for t in range(0, self.number_of_timepoints):
-                current_features = regionprops_table(
-                    self.label_stack[t, :, :],
-                    self.intensity_stack[t, :, :],
-                    properties=['label',
-                                'centroid',
-                                'mean_intensity',
-                                'area'])
-                current_features['timepoint'] = t
-                current_features = pd.DataFrame(current_features)
-                current_features['sum_intensity'] = (
-                    current_features['area'] *
-                    current_features['mean_intensity'])
-                df = df.append(current_features)
-                bar.next()
-            bar.finish()
+        df = self.localize_objects()
         # track the objects in the df
         self.track_df(df,
                       ['centroid-0', 'centroid-1', 'timepoint', 'label'])
